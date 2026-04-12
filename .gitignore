@@ -1,0 +1,4 @@
+config.env
+*.log
+*.lock
+.DS_Store
