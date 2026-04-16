@@ -29,13 +29,33 @@ acquire_lock
 START_TIME=$(date +%s)
 log "START $SCRIPT_NAME"
 
+# Snapshot and sync SQLite databases (avoids "source being updated" errors)
+if [[ ${#SQLITE_DBS[@]:-0} -gt 0 ]]; then
+    SNAP_DIR="/tmp/gdrive-vault-db-snap"
+    mkdir -p "$SNAP_DIR"
+    for db_path in "${SQLITE_DBS[@]}"; do
+        if [[ -f "$db_path" ]]; then
+            db_name=$(basename "$db_path")
+            db_dest_dir=$(dirname "$db_path" | sed "s|^/||; s|/|_|g")
+            if sqlite3 "$db_path" ".backup '$SNAP_DIR/$db_name'" 2>/dev/null; then
+                rclone copy "$SNAP_DIR/$db_name" "${RCLONE_REMOTE}:${GDRIVE_HOT_ROOT}/${db_dest_dir}/" \
+                    "${RCLONE_FLAGS[@]}" || log "WARN: $db_name upload failed (non-fatal)"
+                log "$db_name synced (from snapshot)"
+            else
+                log "WARN: $db_name snapshot failed (non-fatal)"
+            fi
+        fi
+    done
+    rm -rf "$SNAP_DIR"
+fi
+
 # Sync each configured directory
 for dir in "${HOT_SYNC_DIRS[@]}"; do
     dir_name=$(basename "$dir")
     log "Syncing $dir -> ${RCLONE_REMOTE}:${GDRIVE_HOT_ROOT}/${dir_name}/"
     rclone sync "$dir/" "${RCLONE_REMOTE}:${GDRIVE_HOT_ROOT}/${dir_name}/" \
         "${EXCLUDE_FLAGS[@]}" \
-        "${RCLONE_FLAGS[@]}"
+        "${RCLONE_FLAGS[@]}" || log "WARN: $dir_name sync had errors (non-fatal)"
     log "$dir_name synced"
 done
 

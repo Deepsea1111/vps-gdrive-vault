@@ -86,6 +86,18 @@ Every run sends a clean summary — not raw log spam:
 +----------------------------------+
 ```
 
+### SQLite-Safe Database Sync
+SQLite databases get modified during sync, causing rclone's `"source file is being updated"` error — which can crash the entire sync script. We solve this with atomic snapshots:
+
+```bash
+# In config.env
+SQLITE_DBS=(
+    "/root/myproject/data.db"
+)
+```
+
+The hot sync script uses `sqlite3 .backup` to create a consistent snapshot before uploading. If the snapshot or upload fails, it logs a warning and continues — it never kills the sync.
+
 ### Encrypted Backups
 `restic` provides AES-256 encryption, incremental backups, and deduplication:
 ```bash
